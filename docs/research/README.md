@@ -23,11 +23,22 @@ Research findings MUST NOT silently become architecture. Promotion requires an e
 - `layer-3-literature-review.md` — source-backed prior-art review and novelty boundary for Layer 3.
 - `r3-baseline-results.md` — R3.1-R3.3 reference-oracle, synthetic-population, and 1D endpoint results.
 - `r3-2d-range-tree-results.md` — R3.4 static 2D endpoint range-tree results and amplification analysis.
+- `r3-hintm-results.md` — R3.5 HINT^m structural reproduction, parameter sweep, and failed shortcut provenance.
 
 Experimental code lives under:
 
 ```text
 research/layer3/
+```
+
+Current access-path implementations include:
+
+```text
+reference.py
+synthetic.py
+baselines.py
+range_tree.py
+hint_m.py
 ```
 
 Differential tests live under:
@@ -36,27 +47,45 @@ Differential tests live under:
 tests/test_layer3_reference.py
 ```
 
-The reproducible candidate benchmark lives under:
+Reproducible candidate benchmarks live under:
 
 ```text
 benchmarks/layer3_overlap_baselines.py
+benchmarks/layer3_hint_m.py
 ```
 
 ## Layer 3 Research Status
 
 ```text
-R3.0  Literature Refresh                    COMPLETE
-R3.1  Reference Scan Oracle                 COMPLETE
-R3.2  Synthetic Dataset Generator           COMPLETE
-R3.3  1D Endpoint Baselines                 COMPLETE
-R3.4  2D Endpoint Baseline                  COMPLETE
-R3.5  Specialized Prior-Art Index           NEXT
-R3.6  Predicate x Distribution Matrix       PENDING
-R3.7  Open / Indeterminate Extents          PENDING
-R3.8  Multi-Frame Strategies                PENDING
-R3.9  Real-Data Reproduction                PENDING
-R3.10 Planner Statistics                    PENDING
-R3.11 Architecture Decision Record          PENDING
+R3.0   Literature Refresh                    COMPLETE
+R3.1   Reference Scan Oracle                 COMPLETE
+R3.2   Synthetic Dataset Generator           COMPLETE
+R3.3   1D Endpoint Baselines                 COMPLETE
+R3.4   2D Endpoint Baseline                  COMPLETE
+R3.5a  HINT^m Structural Baseline            COMPLETE
+R3.5b  HINT^m Optimized Query Reproduction   NEXT
+R3.6   Predicate x Distribution Matrix       PENDING
+R3.7   Open / Indeterminate Extents          PENDING
+R3.8   Multi-Frame Strategies                PENDING
+R3.9   Real-Data Reproduction                PENDING
+R3.10  Planner Statistics                    PENDING
+R3.11  Architecture Decision Record          PENDING
 ```
 
-Layer 3 remains non-canonical until the experimental program produces reproducible evidence.
+## Current Evidence Boundary
+
+The strongest current prior-art baseline is HINT^m.
+
+The TCDB research program MUST NOT propose a new interval index merely because it outperforms a full scan, a single endpoint index, or the static range-tree baseline.
+
+A TCDB-native access method would need to demonstrate a meaningful advantage over tuned prior art for a TCDB-specific requirement such as:
+
+```text
+named multi-frame composition
+uncertain feasible regions
+semantic-time + commit-time composition
+relation-key + temporal-geometry planning
+append-oriented rebuildable index maintenance
+```
+
+Layer 3 remains non-canonical until the experimental program produces reproducible evidence and R3.11 records an explicit architecture decision.
