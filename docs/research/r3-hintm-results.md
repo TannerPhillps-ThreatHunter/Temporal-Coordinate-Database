@@ -1,6 +1,6 @@
-# R3.5 HINT^m Structural Reproduction
+# R3.5a HINT^m Structural Reproduction
 
-**Status:** REPRODUCED STRUCTURAL BASELINE  
+**Status:** REPRODUCED STRUCTURAL BASELINE — CORRECTED  
 **Research Program:** Layer 3 — Coordinate Access & Indexing  
 **Prior Art:** HINT / HINT^m by Christodoulou, Bouros, and Mamoulis
 
@@ -17,59 +17,79 @@ Primary references:
 
 ## 2. Reproduced Mechanics
 
-The R3.5 baseline implements:
+The corrected R3.5a baseline implements:
 
 1. linear endpoint normalization into `[0, 2^m-1]`;
 2. bottom-up hierarchical decomposition;
 3. canonical-cover interval assignment;
 4. at most two assignments per level;
-5. first assignment classified as `original`;
-6. subsequent assignments classified as `replica`;
+5. exactly one `original` reference per indexed interval;
+6. zero or more `replica` references;
 7. configurable hierarchy depth `m`.
 
-The assignment is based on the HINT/HINT^m procedure described in the paper: at a level, an odd left boundary and/or even right boundary is assigned to a partition, the covered boundary is removed, and both boundaries are shifted to the parent level.
+### Correction discovered during R3.5b
+
+The first R3.5a implementation classified the first emitted canonical-cover partition as `original` too aggressively.
+
+The official HINT^m source contains a more precise right-edge rule. If the left edge has not yet produced an original, an even right-edge partition is classified as original **only when removing that right edge exhausts the remaining cover**. Otherwise that right-edge entry is a replica and the original may occur at a coarser parent level.
+
+Example for an exact `[0,15]` mapped domain:
+
+```text
+interval [4,6]
+
+bottom partition 6 -> replica
+parent partition 2 -> original
+```
+
+The repository implementation and tests were corrected before R3.5b was accepted.
+
+This correction does not change total reference amplification, but it is essential for HINT's duplicate-avoidance query rules.
 
 ## 3. Conservative TCDB Query Evaluator
 
-For this first reproduction, query evaluation is intentionally more conservative than the optimized HINT^m algorithms.
+The R3.5a query evaluator remains intentionally more conservative than the optimized HINT^m algorithms.
 
-For every level:
+For every level it:
 
-1. map the query boundaries into the hierarchy;
-2. visit every partition between the mapped query boundaries;
-3. collect both originals and replicas;
-4. deduplicate object ids;
-5. apply the TCDB reference overlap predicate.
+1. maps the query boundaries into the hierarchy;
+2. visits every partition between the mapped query boundaries;
+3. collects both originals and replicas;
+4. deduplicates object ids;
+5. applies the TCDB reference overlap predicate.
 
-This sacrifices some of HINT^m's published query efficiency in exchange for a simple differential-correctness boundary.
+This establishes a simple differential-correctness baseline before optimized traversal.
 
-The index therefore measures two separate costs:
+The index measures separately:
 
 ```text
 unique_candidates
 scanned_references
 ```
 
-The first measures semantic over-selection after hierarchy pruning.
-The second exposes physical duplicate/reference work caused by replication across levels.
-
 ## 4. Correctness
 
-Randomized differential testing compared HINT^m results against the full reference oracle across:
+Randomized differential testing compared the conservative HINT^m evaluator against the full reference oracle across:
 
-- all six existing synthetic distributions;
+- all six synthetic distributions;
 - HALF_OPEN and CLOSED experimental boundary policies;
 - explicit point extents;
 - point query windows;
-- hierarchy depths used in the experiment.
+- multiple hierarchy depths.
+
+After the original/replica correction, an additional invariant is asserted:
+
+```text
+original_reference_count == indexed_object_count
+```
 
 Result:
 
 ```text
-HintMIndex == ReferenceScan
+HintMIndex.query_overlap == ReferenceScan
 ```
 
-for the conservative evaluator in the tested workloads.
+for the tested workloads.
 
 ## 5. Parameter Sweep
 
@@ -125,19 +145,15 @@ These are research-harness measurements, not production latency claims.
 
 For ordinary distributions at `m=10`, unique candidate counts are close to true result cardinality while reference amplification remains approximately 1.05-2.35x.
 
-The static 2D range-tree baseline previously required about 17.7 stored references per row at 100k rows.
-
-Therefore HINT^m demonstrates a much more favorable pruning/space tradeoff for these workloads.
+The static 2D range-tree baseline required about 17.7 stored references per row at 100k rows.
 
 ### H2 — `m` is a genuine physical planning parameter
 
-Increasing `m` generally reduces unique candidate over-selection but increases stored-reference amplification and, in the conservative evaluator, scanned-reference work.
+Increasing `m` generally reduces unique candidate over-selection while increasing stored-reference amplification.
 
-This confirms that hierarchy depth should not be treated as a fixed semantic constant.
+Hierarchy depth is therefore a physical tuning parameter, not a semantic constant.
 
 ### H3 — Long and equal-start distributions remain adversarial
-
-The `long` and `equal_start` populations produce substantially higher replication than uniform/fixed populations.
 
 At `m=10`:
 
@@ -146,74 +162,68 @@ equal_start: ~5.19 references/row
 long:        ~7.56 references/row
 ```
 
-This reinforces the research requirement for workload-aware index planning and statistics.
+This reinforces the requirement for workload-aware planning and statistics.
 
 ### H4 — Unique candidates and physical references are different costs
 
-At finer hierarchies, semantic over-selection becomes tiny while scanned-reference work can continue increasing because intervals appear in several hierarchy partitions.
-
-Therefore Layer 3 benchmarking must keep separate metrics for:
+Layer 3 benchmarking must keep separate metrics for:
 
 ```text
 result cardinality
 unique candidate cardinality
 physical reference accesses
 storage amplification
+predicate comparisons
 ```
 
-### H5 — Published HINT^m optimizations matter
+### H5 — Correct originals/replicas classification is semantically important to the physical algorithm
 
-The paper's original/replica query rules, subdivisions, sorting, sparsity/skew handling, and storage optimizations are not optional details if the goal is to reproduce published HINT^m performance.
+The structural index could remain lossless under conservative deduplication even with the earlier classification mistake, which made the error easy to miss.
 
-The current TCDB reproduction establishes the hierarchy and correctness baseline, not final HINT^m performance.
+The optimized HINT traversal depends on the stronger invariant:
 
-## 7. Failed Optimization Attempt
+```text
+exactly one original per interval
+```
 
-A direct shortcut was tested using the comparison-free HINT duplicate-avoidance rule:
+This is an example of why a conservative oracle-backed path should precede optimization.
+
+## 7. Superseded Failed Shortcut Interpretation
+
+An earlier experiment applied:
 
 ```text
 first relevant partition -> originals + replicas
 later relevant partitions -> originals only
 ```
 
-Applying this shortcut directly to the discretized HINT^m baseline with TCDB's experimental point semantics produced duplicate and/or mismatch cases on mixed, clustered, equal-start, and long populations.
+and observed duplicates/mismatches.
 
-This result does **not** refute HINT or HINT^m.
+That experiment is now understood to have mixed two problems:
 
-It shows that TCDB must reproduce the full HINT^m boundary-comparison logic rather than mixing the comparison-free HINT query rule with the discretized HINT^m structure.
+1. the initial reproduction contained the original/replica classification error described above;
+2. HINT^m discretization still requires boundary comparisons, unlike comparison-free HINT.
 
-The failed shortcut is retained as research provenance.
+The failure remains useful provenance, but it is **not** evidence that the published HINT^m duplicate-avoidance rule fails.
 
-## 8. Comparison With Earlier Baselines
+R3.5b reproduces the corrected rule directly against the authors' reference source.
 
-For `m=10`, HINT^m reduces candidate cardinality far below the adaptive 1D baseline:
+## 8. Current Interpretation
+
+HINT^m remains the strongest current prior-art interval-index baseline for TCDB Layer 3 research.
+
+Any TCDB-native access method must demonstrate a meaningful advantage for a TCDB-specific requirement such as:
 
 ```text
-uniform:
-  Adaptive 1D ~26,250 candidates
-  HINT^m      ~2,141 candidates
-  matches     ~2,044
-
-mixed:
-  Adaptive 1D ~26,495 candidates
-  HINT^m      ~2,724 candidates
-  matches     ~2,612
+named multi-frame composition
+uncertain feasible regions
+semantic-time + commit-time composition
+relation-key + temporal-geometry planning
+append-oriented rebuildable index maintenance
 ```
 
-It approaches the pruning quality of the static 2D range tree while using dramatically fewer stored references.
+## 9. Next Work
 
-This makes HINT^m the strongest current prior-art baseline in the TCDB Layer 3 research program.
+R3.5b reproduces the duplicate-free optimized query path and measures physical-reference and predicate-comparison savings.
 
-## 9. Current Interpretation
-
-R3.5 does not justify inventing a TCDB-native interval index yet.
-
-Instead, it raises the bar:
-
-> Any TCDB-native access method must demonstrate a meaningful advantage over a tuned HINT^m-class baseline under a workload TCDB specifically requires, such as named multi-frame composition, uncertain feasible regions, commit-time composition, or relation-key + temporal-geometry planning.
-
-## 10. Next Work
-
-R3.5b should reproduce more of the published HINT^m query algorithm, including boundary comparisons and original/replica duplicate avoidance.
-
-After that, R3.6 should broaden benchmarking from overlap-only queries into a predicate x distribution matrix.
+A subsequent R3.5c should reproduce the published bottom-up comparison-minimization flags and then the partition subdivisions/sorting optimizations before R3.6 broadens the predicate matrix.
