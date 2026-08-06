@@ -43,8 +43,6 @@ Primary documents:
 
 Layer 1 defines the authoritative persistent substrate required to preserve Layer 0 semantics.
 
-Its initial physical models are:
-
 ```text
 PersistentDatabase
 ├── Catalog
@@ -69,30 +67,77 @@ Key Layer 1 doctrines:
 - local corruption must be detectable;
 - storage-format versioning is independent of protocol versioning.
 
-Layer 1 defines valid persistent states. Layer 2 will define how state transitions become transactionally durable and recoverable.
-
 Primary documents:
 
 - `docs/architecture/layer-1-persistence.md`
 - `docs/architecture/persistence-algorithms.md`
+
+## Layer 2 — Transactions & Recovery
+
+Layer 2 defines safe state transitions between Layer 1 persistent states.
+
+```text
+Transaction
+├── transaction.id
+├── snapshot.sequence
+├── staged mutations
+└── state
+
+Commit
+├── transaction.id
+└── commit.sequence
+
+WAL
+├── ordered LSNs
+├── TX_MUTATION
+├── TX_COMMIT
+└── CHECKPOINT
+```
+
+Key Layer 2 doctrines:
+
+- the default canonical transaction contract targets strict serializability;
+- `commit.sequence` defines committed database-history order;
+- `commit.sequence`, WAL LSN, wall-clock time, and TemporalFrames are distinct;
+- WAL durability precedes authoritative canonical materialization;
+- the durable WAL commit record establishes commit truth;
+- `COMMIT_OK` acknowledges an already-established durable commit;
+- client uncertainty after connection loss does not create database uncertainty;
+- committed visibility is independent of Segment materialization lag;
+- uncommitted mutations never become authoritative canonical state;
+- recovery is redo-only for durable committed transactions;
+- the applied frontier identifies WAL history already represented in durable canonical state;
+- checkpoints advance recovery state but do not create commits;
+- Manifest generation publication must resolve after failure to complete old or new state, never a torn hybrid;
+- recovery must be deterministic and idempotent;
+- WAL required for acknowledged committed history must never be truncated prematurely;
+- every transition boundary must be testable with deterministic failure injection.
+
+Primary documents:
+
+- `docs/architecture/layer-2-transactions-recovery.md`
+- `docs/architecture/transaction-recovery-algorithms.md`
 
 ## Current Architecture Boundary
 
 ```text
 Layer 0  Foundation                ESTABLISHED
 Layer 1  Persistence               ESTABLISHED
-Layer 2  Transactions & Recovery   NEXT
-Layer 3+                           UNDEFINED / RESEARCH
+Layer 2  Transactions & Recovery   ESTABLISHED
+Layer 3  Coordinate Access         NEXT
+Layer 4+                           UNDEFINED / RESEARCH
 ```
 
-Layer 2 will own transaction boundaries, WAL, durability acknowledgement, fsync ordering, checkpoints, manifest publication, and crash recovery.
+Layer 3 will define how canonical committed temporal state is indexed and accessed efficiently without allowing indexes to become a source of semantic or commit truth.
 
 ## Architectural Authority
 
 ```text
-Layer 0 Invariants
+Layer 0 Semantic Invariants
       ↓
 Layer 1 Persistence Contract
+      ↓
+Layer 2 Transaction & Recovery Contract
       ↓
 Higher Architecture Layers
       ↓
@@ -103,4 +148,4 @@ Implementation
 
 No implementation optimization may silently redefine a lower-layer invariant.
 
-Implementation behavior that contradicts an accepted semantic or persistence invariant is an implementation defect, not an implicit architecture change.
+Implementation behavior that contradicts an accepted semantic, persistence, transaction, or recovery invariant is an implementation defect, not an implicit architecture change.
