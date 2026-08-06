@@ -6,6 +6,7 @@ from research.event_geometry.model import (
     ScalarIntervalIndex,
     derive_same_entity_geometry,
 )
+from research.event_geometry.robustness import scale_variation_experiment
 
 
 class EventGeometryTests(unittest.TestCase):
@@ -63,6 +64,11 @@ class EventGeometryTests(unittest.TestCase):
         hits = index.lookup([100.0, 100.0, 100.0])
         self.assertTrue(any(h.entity_id == "a" for h in hits))
         self.assertTrue(any(h.entity_id == "b" for h in hits))
+
+    def test_scale_sensitive_and_scale_invariant_metrics_are_distinct(self) -> None:
+        result = scale_variation_experiment(per_family=40, events_per_entity=18, seed=17)
+        self.assertGreater(result["log_centered"], result["raw"])
+        self.assertGreater(result["log_centered"], 0.90)
 
 
 if __name__ == "__main__":
