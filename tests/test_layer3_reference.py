@@ -87,6 +87,8 @@ class DifferentialIndexTests(unittest.TestCase):
                 range_tree = StaticEndpointRangeTree(rows)
                 hint_m = HintMIndex(rows, m=10)
 
+                self.assertEqual(hint_m.original_reference_count, len(rows))
+
                 for policy in (BoundaryPolicy.HALF_OPEN, BoundaryPolicy.CLOSED):
                     for window in windows:
                         expected = sorted(reference_scan_overlap(rows, window, policy))
@@ -96,12 +98,18 @@ class DifferentialIndexTests(unittest.TestCase):
                         adaptive_actual, _, _ = adaptive_index.query_overlap(window, policy)
                         range_actual, _, _ = range_tree.query_overlap(window, policy)
                         hint_actual, _ = hint_m.query_overlap(window, policy)
+                        hint_optimized, optimized_stats = hint_m.query_overlap_optimized(
+                            window,
+                            policy,
+                        )
 
                         self.assertEqual(sorted(start_actual), expected)
                         self.assertEqual(sorted(end_actual), expected)
                         self.assertEqual(sorted(adaptive_actual), expected)
                         self.assertEqual(sorted(range_actual), expected)
                         self.assertEqual(sorted(hint_actual), expected)
+                        self.assertEqual(sorted(hint_optimized), expected)
+                        self.assertEqual(optimized_stats.duplicate_emissions, 0)
 
     def test_generation_is_deterministic(self) -> None:
         first = generate_intervals(100, "mixed", seed=23)
@@ -117,6 +125,21 @@ class DifferentialIndexTests(unittest.TestCase):
         rows = generate_intervals(1_000, "mixed", seed=31)
         index = HintMIndex(rows, m=10)
         self.assertGreaterEqual(index.reference_amplification, 1.0)
+        self.assertEqual(index.original_reference_count, len(rows))
+        self.assertEqual(
+            index.original_reference_count + index.replica_reference_count,
+            index.stored_references,
+        )
+
+    def test_hint_m_right_edge_is_not_incorrectly_classified_original(self) -> None:
+        # Exact [0, 15] mapping at m=4. The canonical cover for [4, 6]
+        # first emits the right edge at bottom level, but that entry is a replica;
+        # the parent partition spanning the start of the interval is the original.
+        rows = [Interval(1, 0, 15), Interval(2, 4, 6)]
+        index = HintMIndex(rows, m=4)
+
+        self.assertIn(2, index.partitions[(4, 6)]["replica"])
+        self.assertIn(2, index.partitions[(3, 2)]["original"])
 
     def test_hint_m_m_controls_space_pruning_tradeoff(self) -> None:
         rows = generate_intervals(5_000, "uniform", seed=41)
@@ -131,6 +154,22 @@ class DifferentialIndexTests(unittest.TestCase):
         self.assertEqual(sorted(coarse_matches), sorted(fine_matches))
         self.assertGreaterEqual(fine.reference_amplification, coarse.reference_amplification)
         self.assertLessEqual(fine_stats.unique_candidates, coarse_stats.unique_candidates)
+
+    def test_hint_m_optimized_scans_no_more_than_conservative_path(self) -> None:
+        rows = generate_intervals(10_000, "mixed", seed=43)
+        index = HintMIndex(rows, m=10)
+        windows = generate_windows(50, seed=44)
+
+        for window in windows:
+            conservative, conservative_stats = index.query_overlap(window)
+            optimized, optimized_stats = index.query_overlap_optimized(window)
+
+            self.assertEqual(sorted(conservative), sorted(optimized))
+            self.assertLessEqual(
+                optimized_stats.scanned_references,
+                conservative_stats.scanned_references,
+            )
+            self.assertEqual(optimized_stats.duplicate_emissions, 0)
 
 
 if __name__ == "__main__":
