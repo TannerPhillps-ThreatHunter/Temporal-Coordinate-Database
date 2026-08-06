@@ -67,7 +67,7 @@ Evidence artifacts:
 
 - `event-geometry-literature-review.md` — prior-art boundary around interval sequences, process mining, temporal motifs, and inter-event models.
 - `e0-temporal-event-geometry-results.md` — first temporal-only interval/trajectory experiment.
-- `e1-trajectory-robustness-results.md` — robustness experiments beginning with temporal scale variation.
+- `e1-trajectory-robustness-results.md` — robustness experiments covering temporal scaling and missing observations.
 
 Experimental code:
 
@@ -79,6 +79,12 @@ Differential/unit tests:
 
 ```text
 tests/test_event_geometry.py
+```
+
+Reproducible benchmarks:
+
+```text
+benchmarks/event_geometry_missing_events.py
 ```
 
 Status:
@@ -93,8 +99,8 @@ E0.5  Rolling Interval-Signature Index            COMPLETE
 E0.6  Primitive / Persistence Necessity Test      COMPLETE
 
 E1.1  Temporal Scale Variation                    COMPLETE
-E1.2  Missing Events                              NEXT
-E1.3  Duplicate Events                            PENDING
+E1.2  Missing Events                              COMPLETE
+E1.3  Duplicate Events                            NEXT
 E1.4  Timestamp Jitter / Clock Uncertainty        PENDING
 E1.5  Variable Trajectory Length                  PENDING
 E1.6  Selector Contamination / Identity Ambiguity PENDING
@@ -120,17 +126,35 @@ E1.1 adds:
 5. raw interval displacement remains cadence-sensitive;
 6. scale-normalized analytical projections can recover pattern shape but intentionally discard cadence information.
 
+E1.2 adds:
+
+7. missing an intermediate observation contracts adjacent endpoint-displacement edges by exact vector addition;
+8. endpoint displacement is path-compositional, while signed boundary gap is not generally additive;
+9. ordinary fixed-vector comparison degrades rapidly under missing observations;
+10. ordinary DTW remains competitive at low loss but degrades under heavier deletion in the current synthetic workload;
+11. a deletion-aware alignment that explicitly matches observed displacement to sums of consecutive latent displacements remained approximately stable through 40% internal event deletion;
+12. a long observed interval is ambiguous between genuine long separation and unobserved intermediate events, so geometry alone must not fabricate missing events.
+
 Current research interpretation:
 
 ```text
-Event             Canonical candidate
-EventInterval     Derived + independently addressable/indexable
-Trajectory        Derived + independently addressable/indexable
-IntervalSignature Derived/indexed analytical projection
-SimilarityMode    Query semantics, not canonical state
+Event                 Canonical candidate
+EventInterval         Derived + independently addressable/indexable
+Trajectory            Derived + independently addressable/indexable
+IntervalSignature     Derived/indexed analytical projection
+SimilarityMode        Query semantics, not canonical state
+ObservationCompleteness Epistemic/query context, not inferred truth
 ```
 
-This is not yet architecture doctrine.
+A useful provisional relation is:
+
+```text
+Underlying Trajectory
+        ↓ observation process
+Observed Trajectory
+```
+
+This is a research hypothesis rather than architecture doctrine.
 
 # Shared Evidence Boundary
 
@@ -147,6 +171,9 @@ trace / process sequence analysis
 object-centric event logs
 temporal motifs
 event-interval sequence similarity
+DTW and incomplete-series alignment
+edit-distance event matching
+missing-event recovery in process logs
 ```
 
 A TCDB-native contribution must demonstrate a meaningful semantic, operational, or asymptotic advantage for a requirement that current systems handle poorly or unnaturally.
