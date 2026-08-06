@@ -34,20 +34,73 @@ Layer 0 defines:
 6. information authority boundaries;
 7. dependency rules for later layers.
 
-Layer 0 deliberately does not define page formats, file formats, WAL encoding, index algorithms, query syntax, wire encoding, authentication mechanisms, replication algorithms, consensus, sharding, or deployment topology.
+Primary documents:
+
+- `docs/architecture/layer-0-foundation.md`
+- `docs/architecture/root-algorithms.md`
+
+## Layer 1 — Persistence
+
+Layer 1 defines the authoritative persistent substrate required to preserve Layer 0 semantics.
+
+Its initial physical models are:
+
+```text
+PersistentDatabase
+├── Catalog
+├── Manifest
+├── Segment
+│   └── Block
+│       └── Record
+└── Rebuildable Structures
+```
+
+Key Layer 1 doctrines:
+
+- canonical persistence is append-oriented;
+- published canonical Records are not mutated in place;
+- OPEN Segments may receive appends;
+- SEALED Segments are immutable;
+- the Manifest defines physical database membership;
+- directory contents alone are never authoritative;
+- canonical state is distinct from rebuildable indexes and projections;
+- serialization is versioned, deterministic, bounded, and platform-independent;
+- canonical time is exact on disk;
+- local corruption must be detectable;
+- storage-format versioning is independent of protocol versioning.
+
+Layer 1 defines valid persistent states. Layer 2 will define how state transitions become transactionally durable and recoverable.
+
+Primary documents:
+
+- `docs/architecture/layer-1-persistence.md`
+- `docs/architecture/persistence-algorithms.md`
+
+## Current Architecture Boundary
+
+```text
+Layer 0  Foundation                ESTABLISHED
+Layer 1  Persistence               ESTABLISHED
+Layer 2  Transactions & Recovery   NEXT
+Layer 3+                           UNDEFINED / RESEARCH
+```
+
+Layer 2 will own transaction boundaries, WAL, durability acknowledgement, fsync ordering, checkpoints, manifest publication, and crash recovery.
 
 ## Architectural Authority
 
 ```text
 Layer 0 Invariants
       ↓
-TCDB-MODEL
+Layer 1 Persistence Contract
       ↓
-TCDP
+Higher Architecture Layers
       ↓
-TCDP-QUIC
+TCDB-MODEL / Protocol Specifications
       ↓
 Implementation
 ```
 
-Implementation behavior that contradicts an accepted semantic invariant is an implementation defect, not an implicit model change.
+No implementation optimization may silently redefine a lower-layer invariant.
+
+Implementation behavior that contradicts an accepted semantic or persistence invariant is an implementation defect, not an implicit architecture change.
