@@ -10,6 +10,7 @@ from research.layer3.baselines import (
     StartSortedIndex,
     overlap_region_cardinality,
 )
+from research.layer3.range_tree import StaticEndpointRangeTree
 from research.layer3.reference import BoundaryPolicy, reference_scan_overlap
 from research.layer3.synthetic import DISTRIBUTIONS, generate_intervals, generate_windows
 
@@ -27,10 +28,13 @@ def run_distribution(
     start_index = StartSortedIndex(intervals)
     end_index = EndSortedIndex(intervals)
     adaptive_index = AdaptiveEndpointIndex(intervals)
+    range_tree = StaticEndpointRangeTree(intervals)
 
     start_candidates: List[int] = []
     end_candidates: List[int] = []
     adaptive_candidates: List[int] = []
+    range_candidates: List[int] = []
+    range_nodes: List[int] = []
     exact_region: List[int] = []
     match_counts: List[int] = []
 
@@ -42,6 +46,7 @@ def run_distribution(
         start_actual, start_count = start_index.query_overlap(window)
         end_actual, end_count = end_index.query_overlap(window)
         adaptive_actual, adaptive_count, _ = adaptive_index.query_overlap(window)
+        range_actual, range_count, visited_nodes = range_tree.query_overlap(window)
 
         if sorted(start_actual) != expected:
             raise AssertionError("start-sorted index disagrees with reference oracle")
@@ -49,10 +54,14 @@ def run_distribution(
             raise AssertionError("end-sorted index disagrees with reference oracle")
         if sorted(adaptive_actual) != expected:
             raise AssertionError("adaptive endpoint index disagrees with reference oracle")
+        if sorted(range_actual) != expected:
+            raise AssertionError("2D range tree disagrees with reference oracle")
 
         start_candidates.append(start_count)
         end_candidates.append(end_count)
         adaptive_candidates.append(adaptive_count)
+        range_candidates.append(range_count)
+        range_nodes.append(visited_nodes)
         match_counts.append(len(expected))
         exact_region.append(overlap_region_cardinality(intervals, window))
 
@@ -63,7 +72,10 @@ def run_distribution(
         "avg_start_candidates": statistics.mean(start_candidates),
         "avg_end_candidates": statistics.mean(end_candidates),
         "avg_adaptive_candidates": statistics.mean(adaptive_candidates),
+        "avg_range_candidates": statistics.mean(range_candidates),
+        "avg_range_nodes": statistics.mean(range_nodes),
         "avg_exact_region": statistics.mean(exact_region),
+        "range_stored_references": float(range_tree.stored_reference_count()),
     }
 
 
@@ -76,7 +88,8 @@ def main() -> None:
 
     header = (
         "distribution,rows,queries,avg_matches,avg_start_candidates,"
-        "avg_end_candidates,avg_adaptive_candidates,avg_exact_region"
+        "avg_end_candidates,avg_adaptive_candidates,avg_range_candidates,"
+        "avg_range_nodes,avg_exact_region,range_stored_references"
     )
     print(header)
 
@@ -93,7 +106,10 @@ def main() -> None:
             f"{result['avg_start_candidates']:.3f},"
             f"{result['avg_end_candidates']:.3f},"
             f"{result['avg_adaptive_candidates']:.3f},"
-            f"{result['avg_exact_region']:.3f}"
+            f"{result['avg_range_candidates']:.3f},"
+            f"{result['avg_range_nodes']:.3f},"
+            f"{result['avg_exact_region']:.3f},"
+            f"{result['range_stored_references']:.0f}"
         )
 
 
