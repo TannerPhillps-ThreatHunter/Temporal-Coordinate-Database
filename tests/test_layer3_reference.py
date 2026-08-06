@@ -15,7 +15,7 @@ from research.layer3.synthetic import DISTRIBUTIONS, generate_intervals, generat
 
 
 class BoundaryPolicyTests(unittest.TestCase):
-    def test_half_open_touching_intervals_do_not_overlap(self) -> None:
+    def test_half_open_touching_nonpoint_intervals_do_not_overlap(self) -> None:
         rows = [Interval(1, 10, 20)]
         self.assertEqual(
             reference_scan_overlap(rows, Window(20, 30), BoundaryPolicy.HALF_OPEN),
@@ -29,11 +29,32 @@ class BoundaryPolicyTests(unittest.TestCase):
             [1],
         )
 
-    def test_zero_length_interval_is_empty_under_half_open_overlap(self) -> None:
+    def test_point_extent_survives_half_open_policy(self) -> None:
         rows = [Interval(1, 10, 10)]
         self.assertEqual(
             reference_scan_overlap(rows, Window(9, 11), BoundaryPolicy.HALF_OPEN),
+            [1],
+        )
+
+    def test_point_at_half_open_window_start_matches(self) -> None:
+        rows = [Interval(1, 10, 10)]
+        self.assertEqual(
+            reference_scan_overlap(rows, Window(10, 20), BoundaryPolicy.HALF_OPEN),
+            [1],
+        )
+
+    def test_point_at_half_open_window_end_does_not_match(self) -> None:
+        rows = [Interval(1, 20, 20)]
+        self.assertEqual(
+            reference_scan_overlap(rows, Window(10, 20), BoundaryPolicy.HALF_OPEN),
             [],
+        )
+
+    def test_equal_points_overlap(self) -> None:
+        rows = [Interval(1, 20, 20)]
+        self.assertEqual(
+            reference_scan_overlap(rows, Window(20, 20), BoundaryPolicy.HALF_OPEN),
+            [1],
         )
 
 
@@ -42,7 +63,21 @@ class DifferentialIndexTests(unittest.TestCase):
         for distribution in DISTRIBUTIONS:
             with self.subTest(distribution=distribution):
                 rows = generate_intervals(5_000, distribution, seed=17)
+                rows.extend(
+                    [
+                        Interval(10_001, 0, 0),
+                        Interval(10_002, 500_000, 500_000),
+                        Interval(10_003, 1_000_000, 1_000_000),
+                    ]
+                )
                 windows = generate_windows(100, seed=19)
+                windows.extend(
+                    [
+                        Window(0, 0),
+                        Window(500_000, 500_000),
+                        Window(1_000_000, 1_000_000),
+                    ]
+                )
 
                 start_index = StartSortedIndex(rows)
                 end_index = EndSortedIndex(rows)
