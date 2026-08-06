@@ -67,6 +67,7 @@ Evidence artifacts:
 
 - `event-geometry-literature-review.md` — prior-art boundary around interval sequences, process mining, temporal motifs, and inter-event models.
 - `e0-temporal-event-geometry-results.md` — first temporal-only interval/trajectory experiment.
+- `e1-trajectory-robustness-results.md` — robustness experiments beginning with temporal scale variation.
 
 Experimental code:
 
@@ -83,35 +84,41 @@ tests/test_event_geometry.py
 Status:
 
 ```text
-E0.0  Prior-Art Boundary                         COMPLETE
-E0.1  Relation-Bound EventInterval Model         COMPLETE
-E0.2  Relation-Selected Trajectory Model         COMPLETE
-E0.3  Translation-Invariant Interval Retrieval   COMPLETE
-E0.4  Independent Scalar Interval Index          COMPLETE
-E0.5  Rolling Interval-Signature Index           COMPLETE
-E0.6  Primitive / Persistence Necessity Test     COMPLETE
+E0.0  Prior-Art Boundary                          COMPLETE
+E0.1  Relation-Bound EventInterval Model          COMPLETE
+E0.2  Relation-Selected Trajectory Model          COMPLETE
+E0.3  Translation-Invariant Interval Retrieval    COMPLETE
+E0.4  Independent Scalar Interval Index           COMPLETE
+E0.5  Rolling Interval-Signature Index            COMPLETE
+E0.6  Primitive / Persistence Necessity Test      COMPLETE
 
-E1.1  Temporal Scale Variation                   NEXT
-E1.2  Missing Events                             PENDING
-E1.3  Duplicate Events                           PENDING
-E1.4  Timestamp Jitter / Clock Uncertainty       PENDING
-E1.5  Variable Trajectory Length                 PENDING
+E1.1  Temporal Scale Variation                    COMPLETE
+E1.2  Missing Events                              NEXT
+E1.3  Duplicate Events                            PENDING
+E1.4  Timestamp Jitter / Clock Uncertainty        PENDING
+E1.5  Variable Trajectory Length                  PENDING
 E1.6  Selector Contamination / Identity Ambiguity PENDING
-E1.7  Signature Metric Comparison                PENDING
-E1.8  Real-Data Reproduction                     PENDING
+E1.7  Signature Metric Comparison                 PENDING
+E1.8  Real-Data Reproduction                      PENDING
 
-E2    Multi-Frame Event Geometry                 DEFERRED
-E3    Computational Position X                   DEFERRED
-E4    Causal / Topological Geometry              DEFERRED
+E2    Multi-Frame Event Geometry                  DEFERRED
+E3    Computational Position X                    DEFERRED
+E4    Causal / Topological Geometry               DEFERRED
 ```
 
-## Current E0 Evidence
+## Current Event-Geometry Evidence
 
-The first temporal-only experiment supports three narrow findings:
+E0 supports three narrow findings:
 
 1. relation-selected interval displacement can preserve behavior under arbitrary absolute temporal translation;
 2. derived EventIntervals can be independently indexed without becoming canonical state;
 3. all-pairs interval materialization is combinatorially unacceptable, so relation selection is part of the geometry definition.
+
+E1.1 adds:
+
+4. translation invariance and temporal scale invariance are different query semantics;
+5. raw interval displacement remains cadence-sensitive;
+6. scale-normalized analytical projections can recover pattern shape but intentionally discard cadence information.
 
 Current research interpretation:
 
@@ -120,6 +127,7 @@ Event             Canonical candidate
 EventInterval     Derived + independently addressable/indexable
 Trajectory        Derived + independently addressable/indexable
 IntervalSignature Derived/indexed analytical projection
+SimilarityMode    Query semantics, not canonical state
 ```
 
 This is not yet architecture doctrine.
