@@ -6,6 +6,33 @@ from typing import Iterable, List, Tuple
 from .reference import BoundaryPolicy, Interval, Window, overlaps
 
 
+def _start_candidate_stop(
+    starts: List[int],
+    window: Window,
+    policy: BoundaryPolicy,
+) -> int:
+    if policy is BoundaryPolicy.CLOSED:
+        return bisect_right(starts, window.end)
+
+    # For a non-point [a,b) query, candidates require start < b.
+    # For a point query t, an interval or point may match when start <= t.
+    if window.is_point:
+        return bisect_right(starts, window.start)
+    return bisect_left(starts, window.end)
+
+
+def _end_candidate_first(
+    ends: List[int],
+    window: Window,
+    policy: BoundaryPolicy,
+) -> int:
+    # end >= query.start is the lossless candidate condition for CLOSED.
+    # It is also required for HALF_OPEN because a point extent exactly at
+    # query.start must remain a candidate. Non-point intervals ending exactly
+    # there become harmless false positives removed by the oracle predicate.
+    return bisect_left(ends, window.start)
+
+
 class StartSortedIndex:
     """1D baseline ordered by interval start."""
 
@@ -18,11 +45,7 @@ class StartSortedIndex:
         window: Window,
         policy: BoundaryPolicy = BoundaryPolicy.HALF_OPEN,
     ) -> Tuple[List[int], int]:
-        if policy is BoundaryPolicy.HALF_OPEN:
-            stop = bisect_left(self.starts, window.end)
-        else:
-            stop = bisect_right(self.starts, window.end)
-
+        stop = _start_candidate_stop(self.starts, window, policy)
         candidates = self.rows[:stop]
         matches = [
             row.object_id for row in candidates if overlaps(row, window, policy)
@@ -42,11 +65,7 @@ class EndSortedIndex:
         window: Window,
         policy: BoundaryPolicy = BoundaryPolicy.HALF_OPEN,
     ) -> Tuple[List[int], int]:
-        if policy is BoundaryPolicy.HALF_OPEN:
-            first = bisect_right(self.ends, window.start)
-        else:
-            first = bisect_left(self.ends, window.start)
-
+        first = _end_candidate_first(self.ends, window, policy)
         candidates = self.rows[first:]
         matches = [
             row.object_id for row in candidates if overlaps(row, window, policy)
@@ -55,11 +74,7 @@ class EndSortedIndex:
 
 
 class AdaptiveEndpointIndex:
-    """Choose the smaller 1D endpoint candidate side per overlap query.
-
-    This is intentionally simple. It provides a planner-aware 1D baseline before
-    any 2D or specialized temporal index is allowed to claim improvement.
-    """
+    """Choose the smaller lossless 1D endpoint candidate side per query."""
 
     def __init__(self, intervals: Iterable[Interval]) -> None:
         rows = list(intervals)
@@ -71,12 +86,16 @@ class AdaptiveEndpointIndex:
         window: Window,
         policy: BoundaryPolicy = BoundaryPolicy.HALF_OPEN,
     ) -> Tuple[List[int], int, str]:
-        if policy is BoundaryPolicy.HALF_OPEN:
-            start_stop = bisect_left(self.start_index.starts, window.end)
-            end_first = bisect_right(self.end_index.ends, window.start)
-        else:
-            start_stop = bisect_right(self.start_index.starts, window.end)
-            end_first = bisect_left(self.end_index.ends, window.start)
+        start_stop = _start_candidate_stop(
+            self.start_index.starts,
+            window,
+            policy,
+        )
+        end_first = _end_candidate_first(
+            self.end_index.ends,
+            window,
+            policy,
+        )
 
         start_count = start_stop
         end_count = len(self.end_index.rows) - end_first
@@ -99,11 +118,10 @@ def overlap_region_cardinality(
     window: Window,
     policy: BoundaryPolicy = BoundaryPolicy.HALF_OPEN,
 ) -> int:
-    """Cardinality of the exact 2D endpoint overlap region.
+    """Cardinality of the exact endpoint-space overlap result region.
 
-    This is NOT an index implementation. It measures the irreducible qualifying
-    endpoint region so later 2D structures can be compared against the amount of
-    useful work available in principle.
+    This is NOT an index implementation. It measures the qualifying region so
+    future 2D structures can be compared with the useful result cardinality.
     """
 
     return sum(1 for row in intervals if overlaps(row, window, policy))
