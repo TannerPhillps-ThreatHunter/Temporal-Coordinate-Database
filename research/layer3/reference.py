@@ -6,10 +6,11 @@ from typing import Iterable, List
 
 
 class BoundaryPolicy(str, Enum):
-    """Experimental interval boundary policy.
+    """Experimental boundary policy for non-point extents.
 
-    Layer 0 has not yet frozen interval boundary semantics. The research oracle
-    therefore makes boundary policy explicit instead of silently choosing one.
+    TCDB defines s=e as an instantaneous point extent. Therefore a point is not
+    interpreted as an empty half-open interval. Point semantics are handled
+    explicitly by the reference oracle.
     """
 
     HALF_OPEN = "half_open"
@@ -27,6 +28,10 @@ class Interval:
         if self.start > self.end:
             raise ValueError("interval start must be <= end")
 
+    @property
+    def is_point(self) -> bool:
+        return self.start == self.end
+
 
 @dataclass(frozen=True)
 class Window:
@@ -37,28 +42,38 @@ class Window:
         if self.start > self.end:
             raise ValueError("window start must be <= end")
 
+    @property
+    def is_point(self) -> bool:
+        return self.start == self.end
+
 
 def overlaps(
     interval: Interval,
     window: Window,
     policy: BoundaryPolicy = BoundaryPolicy.HALF_OPEN,
 ) -> bool:
-    """Reference overlap predicate over determinate intervals.
+    """Reference overlap predicate over determinate temporal extents.
 
-    HALF_OPEN interprets extents as [start, end).
-    CLOSED interprets extents as [start, end].
-
-    The function is intentionally obvious rather than optimized. It is the
-    semantic oracle against which candidate-generating indexes are checked.
+    Under HALF_OPEN, non-point extents use [start, end), while s=e remains a
+    first-class instantaneous point rather than becoming the empty set.
     """
-
-    if policy is BoundaryPolicy.HALF_OPEN:
-        return interval.start < window.end and interval.end > window.start
 
     if policy is BoundaryPolicy.CLOSED:
         return interval.start <= window.end and interval.end >= window.start
 
-    raise ValueError(f"unsupported boundary policy: {policy}")
+    if policy is not BoundaryPolicy.HALF_OPEN:
+        raise ValueError(f"unsupported boundary policy: {policy}")
+
+    if interval.is_point and window.is_point:
+        return interval.start == window.start
+
+    if interval.is_point:
+        return window.start <= interval.start < window.end
+
+    if window.is_point:
+        return interval.start <= window.start < interval.end
+
+    return interval.start < window.end and interval.end > window.start
 
 
 def before(
@@ -67,6 +82,8 @@ def before(
     policy: BoundaryPolicy = BoundaryPolicy.HALF_OPEN,
 ) -> bool:
     if policy is BoundaryPolicy.HALF_OPEN:
+        if interval.is_point:
+            return interval.start < window.start
         return interval.end <= window.start
     if policy is BoundaryPolicy.CLOSED:
         return interval.end < window.start
@@ -79,7 +96,9 @@ def after(
     policy: BoundaryPolicy = BoundaryPolicy.HALF_OPEN,
 ) -> bool:
     if policy is BoundaryPolicy.HALF_OPEN:
-        return interval.start >= window.end
+        if interval.is_point:
+            return interval.start >= window.end if not window.is_point else interval.start > window.start
+        return interval.start >= window.end if not window.is_point else interval.start > window.start
     if policy is BoundaryPolicy.CLOSED:
         return interval.start > window.end
     raise ValueError(f"unsupported boundary policy: {policy}")
@@ -90,8 +109,11 @@ def contains(
     window: Window,
     policy: BoundaryPolicy = BoundaryPolicy.HALF_OPEN,
 ) -> bool:
-    # Endpoint containment has the same inequality form for these policies;
-    # the difference appears at overlap/adjacency boundaries.
+    if policy is BoundaryPolicy.HALF_OPEN:
+        if interval.is_point:
+            return window.is_point and interval.start == window.start
+        if window.is_point:
+            return interval.start <= window.start < interval.end
     return interval.start <= window.start and interval.end >= window.end
 
 
@@ -100,6 +122,13 @@ def during(
     window: Window,
     policy: BoundaryPolicy = BoundaryPolicy.HALF_OPEN,
 ) -> bool:
+    if policy is BoundaryPolicy.HALF_OPEN:
+        if interval.is_point:
+            if window.is_point:
+                return interval.start == window.start
+            return window.start <= interval.start < window.end
+        if window.is_point:
+            return False
     return interval.start >= window.start and interval.end <= window.end
 
 
