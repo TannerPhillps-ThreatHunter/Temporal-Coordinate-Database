@@ -6,7 +6,10 @@ from research.event_geometry.model import (
     ScalarIntervalIndex,
     derive_same_entity_geometry,
 )
-from research.event_geometry.robustness import scale_variation_experiment
+from research.event_geometry.robustness import (
+    missing_event_experiment,
+    scale_variation_experiment,
+)
 
 
 class EventGeometryTests(unittest.TestCase):
@@ -42,6 +45,28 @@ class EventGeometryTests(unittest.TestCase):
             [i.delta_start for i in ints_b],
         )
 
+    def test_endpoint_displacement_composes_across_missing_event(self) -> None:
+        events = [
+            Event(1, "x", "a", 10.0, 15.0),
+            Event(2, "x", "a", 30.0, 38.0),
+            Event(3, "x", "a", 80.0, 91.0),
+        ]
+        intervals, _ = derive_same_entity_geometry(events)
+        ab, bc = intervals
+
+        self.assertEqual(ab.delta_start + bc.delta_start, events[2].start - events[0].start)
+        self.assertEqual(ab.delta_end + bc.delta_end, events[2].end - events[0].end)
+        self.assertEqual(
+            ab.duration_delta + bc.duration_delta,
+            events[2].duration - events[0].duration,
+        )
+
+        # Signed boundary gaps are not path-additive in general.
+        self.assertNotEqual(
+            ab.signed_gap + bc.signed_gap,
+            events[2].start - events[0].end,
+        )
+
     def test_scalar_index_matches_scan(self) -> None:
         events = [
             Event(1, "a", "x", 0.0, 1.0),
@@ -69,6 +94,18 @@ class EventGeometryTests(unittest.TestCase):
         result = scale_variation_experiment(per_family=40, events_per_entity=18, seed=17)
         self.assertGreater(result["log_centered"], result["raw"])
         self.assertGreater(result["log_centered"], 0.90)
+
+    def test_coalescence_aware_matching_handles_missing_events(self) -> None:
+        result = missing_event_experiment(
+            train_per_family=20,
+            test_per_family=20,
+            events_per_entity=18,
+            deletion_rates=(0.30,),
+            seed=17,
+        )[0.30]
+        self.assertGreater(result["coalescence"], result["dtw"])
+        self.assertGreater(result["coalescence"], result["resampled"])
+        self.assertGreater(result["coalescence"], 0.80)
 
 
 if __name__ == "__main__":
