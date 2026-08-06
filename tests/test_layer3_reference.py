@@ -5,6 +5,7 @@ from research.layer3.baselines import (
     EndSortedIndex,
     StartSortedIndex,
 )
+from research.layer3.range_tree import StaticEndpointRangeTree
 from research.layer3.reference import (
     BoundaryPolicy,
     Interval,
@@ -59,7 +60,7 @@ class BoundaryPolicyTests(unittest.TestCase):
 
 
 class DifferentialIndexTests(unittest.TestCase):
-    def test_all_1d_baselines_equal_reference_oracle(self) -> None:
+    def test_all_baselines_equal_reference_oracle(self) -> None:
         for distribution in DISTRIBUTIONS:
             with self.subTest(distribution=distribution):
                 rows = generate_intervals(5_000, distribution, seed=17)
@@ -82,6 +83,7 @@ class DifferentialIndexTests(unittest.TestCase):
                 start_index = StartSortedIndex(rows)
                 end_index = EndSortedIndex(rows)
                 adaptive_index = AdaptiveEndpointIndex(rows)
+                range_tree = StaticEndpointRangeTree(rows)
 
                 for policy in (BoundaryPolicy.HALF_OPEN, BoundaryPolicy.CLOSED):
                     for window in windows:
@@ -90,15 +92,22 @@ class DifferentialIndexTests(unittest.TestCase):
                         start_actual, _ = start_index.query_overlap(window, policy)
                         end_actual, _ = end_index.query_overlap(window, policy)
                         adaptive_actual, _, _ = adaptive_index.query_overlap(window, policy)
+                        range_actual, _, _ = range_tree.query_overlap(window, policy)
 
                         self.assertEqual(sorted(start_actual), expected)
                         self.assertEqual(sorted(end_actual), expected)
                         self.assertEqual(sorted(adaptive_actual), expected)
+                        self.assertEqual(sorted(range_actual), expected)
 
     def test_generation_is_deterministic(self) -> None:
         first = generate_intervals(100, "mixed", seed=23)
         second = generate_intervals(100, "mixed", seed=23)
         self.assertEqual(first, second)
+
+    def test_range_tree_reports_reference_amplification(self) -> None:
+        rows = generate_intervals(1_000, "uniform", seed=31)
+        tree = StaticEndpointRangeTree(rows)
+        self.assertGreater(tree.stored_reference_count(), len(rows))
 
 
 if __name__ == "__main__":
