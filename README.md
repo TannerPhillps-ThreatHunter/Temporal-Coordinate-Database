@@ -16,7 +16,7 @@ subject to:
 start <= end
 ```
 
-TCDB is developed specification-first. Implementations conform to the semantic model and protocol specifications rather than implicitly defining them.
+TCDB is developed specification-first. Implementations conform to the semantic model and architecture rather than implicitly defining them.
 
 ## Architecture
 
@@ -31,9 +31,16 @@ Layer 6  Security & Operability
 Layer 7  Availability & Distribution
 ```
 
-Layer 0 is the current architectural focus.
+Current state:
 
-## Layer 0
+```text
+Layer 0  Foundation                ESTABLISHED
+Layer 1  Persistence               ESTABLISHED
+Layer 2  Transactions & Recovery   NEXT
+Layer 3+                           UNDEFINED / RESEARCH
+```
+
+## Layer 0 — Foundation
 
 ```text
 Root Models
@@ -58,11 +65,27 @@ Information Doctrine
 └── Analytical
 ```
 
+## Layer 1 — Persistence
+
+```text
+PersistentDatabase
+├── Catalog
+├── Manifest
+├── Segment
+│   └── Block
+│       └── Record
+└── Rebuildable Structures
+```
+
+Layer 1 establishes an append-oriented canonical persistence model in which published Records are not modified in place, sealed Segments are immutable, the Manifest defines authoritative physical membership, and rebuildable indexes never become the sole source of semantic truth.
+
 See:
 
 - `ARCHITECTURE.md`
 - `docs/architecture/layer-0-foundation.md`
 - `docs/architecture/root-algorithms.md`
+- `docs/architecture/layer-1-persistence.md`
+- `docs/architecture/persistence-algorithms.md`
 
 ## Specification Tracks
 
@@ -74,4 +97,6 @@ TCDP/1 is intended to be QUIC-native.
 
 ## Status
 
-TCDB is transitioning from exploratory research and proof-of-concept work into formal architecture and specification development.
+TCDB has transitioned from exploratory research and proof-of-concept work into formal architecture and specification development.
+
+The next architecture target is **Layer 2 — Transactions & Recovery**: transaction boundaries, write-ahead logging, commit acknowledgement, fsync ordering, checkpoints, manifest publication, and deterministic crash recovery.
