@@ -5,6 +5,7 @@ from research.layer3.baselines import (
     EndSortedIndex,
     StartSortedIndex,
 )
+from research.layer3.hint_m import HintMIndex
 from research.layer3.range_tree import StaticEndpointRangeTree
 from research.layer3.reference import (
     BoundaryPolicy,
@@ -84,6 +85,7 @@ class DifferentialIndexTests(unittest.TestCase):
                 end_index = EndSortedIndex(rows)
                 adaptive_index = AdaptiveEndpointIndex(rows)
                 range_tree = StaticEndpointRangeTree(rows)
+                hint_m = HintMIndex(rows, m=10)
 
                 for policy in (BoundaryPolicy.HALF_OPEN, BoundaryPolicy.CLOSED):
                     for window in windows:
@@ -93,11 +95,13 @@ class DifferentialIndexTests(unittest.TestCase):
                         end_actual, _ = end_index.query_overlap(window, policy)
                         adaptive_actual, _, _ = adaptive_index.query_overlap(window, policy)
                         range_actual, _, _ = range_tree.query_overlap(window, policy)
+                        hint_actual, _ = hint_m.query_overlap(window, policy)
 
                         self.assertEqual(sorted(start_actual), expected)
                         self.assertEqual(sorted(end_actual), expected)
                         self.assertEqual(sorted(adaptive_actual), expected)
                         self.assertEqual(sorted(range_actual), expected)
+                        self.assertEqual(sorted(hint_actual), expected)
 
     def test_generation_is_deterministic(self) -> None:
         first = generate_intervals(100, "mixed", seed=23)
@@ -108,6 +112,25 @@ class DifferentialIndexTests(unittest.TestCase):
         rows = generate_intervals(1_000, "uniform", seed=31)
         tree = StaticEndpointRangeTree(rows)
         self.assertGreater(tree.stored_reference_count(), len(rows))
+
+    def test_hint_m_reference_amplification_is_reported(self) -> None:
+        rows = generate_intervals(1_000, "mixed", seed=31)
+        index = HintMIndex(rows, m=10)
+        self.assertGreaterEqual(index.reference_amplification, 1.0)
+
+    def test_hint_m_m_controls_space_pruning_tradeoff(self) -> None:
+        rows = generate_intervals(5_000, "uniform", seed=41)
+        window = Window(400_000, 410_000)
+
+        coarse = HintMIndex(rows, m=6)
+        fine = HintMIndex(rows, m=12)
+
+        coarse_matches, coarse_stats = coarse.query_overlap(window)
+        fine_matches, fine_stats = fine.query_overlap(window)
+
+        self.assertEqual(sorted(coarse_matches), sorted(fine_matches))
+        self.assertGreaterEqual(fine.reference_amplification, coarse.reference_amplification)
+        self.assertLessEqual(fine_stats.unique_candidates, coarse_stats.unique_candidates)
 
 
 if __name__ == "__main__":
