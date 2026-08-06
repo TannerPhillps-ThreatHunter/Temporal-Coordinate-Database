@@ -4,9 +4,9 @@
 **Program:** Event Geometry  
 **Canonical:** No
 
-## E1.1 — Temporal Scale Variation
+# E1.1 — Temporal Scale Variation
 
-### Question
+## Question
 
 Does an interval trajectory retain recognizable geometry when the entire temporal pattern is uniformly stretched or compressed?
 
@@ -122,12 +122,315 @@ This experiment does not establish that:
 - elastic methods such as DTW are inferior or unnecessary;
 - a trajectory-similarity index should be persisted.
 
-## Plan
+---
+
+# E1.2 — Missing Events
+
+## Question
+
+What happens to relation-selected interval geometry when the underlying behavior continues but one or more observations are absent?
+
+The experiment isolates missing **internal** events. The first and last observations are retained so prefix/suffix truncation is deferred to E1.5.
+
+## Prior-Art Boundary
+
+Missing observations and sequence alignment are established research areas.
+
+Relevant prior art includes:
+
+- Dynamic Time Warping and incomplete-series variants;
+- edit-distance measures for event sequences with insertion/deletion operations;
+- missing-event recovery and trace alignment in process mining;
+- incomplete event-log conformance and reconstruction.
+
+Representative references include:
+
+- Yurtman et al., *Estimating Dynamic Time Warping Distance Between Time Series with Missing Data*, ECML-PKDD 2023;
+- Song et al., *Heuristic Recovery of Missing Events in Process Logs*;
+- Marwan et al., *Challenges and perspectives in recurrence analyses of event time series*, 2023.
+
+TCDB therefore makes no novelty claim for robust sequence alignment or missing-event recovery.
+
+The narrower question is whether TCDB's relation-selected displacement representation exposes a useful compositional law for incomplete observation.
+
+## Missing-Event Geometry
+
+For three ordered observations:
+
+```text
+A --V_AB--> B --V_BC--> C
+```
+
+where endpoint displacement is:
+
+```text
+V_AB = (Δstart_AB, Δend_AB)
+```
+
+if `B` is not observed, the directly observable displacement is:
+
+```text
+V_AC = (Δstart_AC, Δend_AC)
+```
+
+and exactly:
+
+```text
+V_AC = V_AB + V_BC
+```
+
+because:
+
+```text
+start_C - start_A
+    = (start_B - start_A) + (start_C - start_B)
+
+end_C - end_A
+    = (end_B - end_A) + (end_C - end_B)
+```
+
+Likewise:
+
+```text
+Δduration_AC = Δduration_AB + Δduration_BC
+```
+
+This is **not** true for every derived interval measure. In particular, the signed boundary gap:
+
+```text
+G_AB = start_B - end_A
+```
+
+is not generally path-additive.
+
+Therefore:
+
+```text
+endpoint displacement is compositional
+signed boundary gap is not generally compositional
+```
+
+This distinction matters for missing-observation robustness.
+
+## Experimental Methods
+
+Five trajectory families were retained:
+
+```text
+periodic
+alternating
+burst
+accelerating
+random
+```
+
+For each family:
+
+```text
+100 clean training trajectories
+100 independently generated test trajectories
+24 events / clean trajectory
+23 clean inter-event displacements
+```
+
+A clean family prototype is the component-wise median training trajectory.
+
+Internal events in test trajectories are independently deleted with probabilities:
+
+```text
+0%
+5%
+10%
+20%
+30%
+40%
+```
+
+Deleting an event automatically coalesces its adjacent `Δstart` displacements by addition.
+
+Three comparison methods were tested.
+
+### Resampled fixed-length baseline
+
+The shortened observed gap sequence is linearly resampled back to the original length and compared in log-gap space.
+
+This deliberately represents a naïve fixed-vector strategy.
+
+### Ordinary DTW
+
+Dynamic Time Warping is applied to log inter-event displacement.
+
+This provides an elastic prior-art baseline that supports sequences of different length.
+
+### Coalescence-aware alignment
+
+A dynamic program permits one observed displacement to match the **sum of one or more consecutive reference displacements**.
+
+Conceptually:
+
+```text
+observed_gap_j
+    <->
+reference_gap_i + ... + reference_gap_k
+```
+
+This directly represents the geometry caused by one or more missing intermediate observations.
+
+The implementation is an experimental research baseline. It is not claimed as novel and has not been optimized.
+
+## Results
+
+| Internal Event Deletion | Mean Observed Gaps | Resampled | DTW | Coalescence-Aware |
+|---:|---:|---:|---:|---:|
+| 0% | 23.000 | 90.0% | 86.4% | 90.0% |
+| 5% | 21.956 | 75.2% | 88.2% | 90.6% |
+| 10% | 20.864 | 65.0% | **90.4%** | 90.2% |
+| 20% | 18.556 | 48.2% | 79.8% | **90.0%** |
+| 30% | 16.582 | 38.4% | 66.0% | **90.4%** |
+| 40% | 14.262 | 31.6% | 51.8% | **90.0%** |
+
+These are prototype-classification results and are not directly comparable to E0's 98.27% leave-one-out nearest-neighbor score.
+
+The relevant measurement is degradation under increasing observation loss.
+
+## Finding E1.2-F1 — Event deletion contracts trajectory edges
+
+Missing an intermediate event does not simply create an absent vector component.
+
+It changes observed geometry by path contraction:
+
+```text
+V_AB, V_BC
+    ->
+V_AC = V_AB + V_BC
+```
+
+This is a precise computational effect of incomplete observation.
+
+## Finding E1.2-F2 — Ordinary fixed-vector comparison fails quickly
+
+The resampled baseline dropped from 90.0% to 31.6% as internal deletion increased from 0% to 40%.
+
+Therefore ordinary fixed-position vector similarity is unsuitable when observations may disappear.
+
+## Finding E1.2-F3 — DTW helps, but does not encode the deletion law directly
+
+DTW remained strong at low deletion rates and slightly outperformed the experimental coalescence metric at 10% deletion:
+
+```text
+DTW:         90.4%
+coalescence: 90.2%
+```
+
+However, DTW degraded materially under heavier loss:
+
+```text
+20% deletion -> 79.8%
+30% deletion -> 66.0%
+40% deletion -> 51.8%
+```
+
+This is evidence against claiming that the coalescence-aware method is universally superior.
+
+It instead suggests that explicitly modeling event deletion becomes valuable as observation incompleteness grows.
+
+## Finding E1.2-F4 — Coalescence-aware matching remained stable under heavy loss
+
+The experimental deletion-aware metric remained approximately flat near 90% from 0% through 40% internal event deletion.
+
+This supports the hypothesis:
+
+> Missing-event robustness may be better modeled as geometry-preserving path contraction than as generic vector corruption.
+
+The result must still survive duplicates, jitter, variable trajectory length, and real data.
+
+## Finding E1.2-F5 — Observation completeness is part of interpretation
+
+The same underlying trajectory can produce different observed interval sequences depending on which events were captured.
+
+Therefore:
+
+```text
+Underlying Trajectory != Observed Trajectory
+```
+
+and:
+
+```text
+Observed Geometry = Projection(Underlying Geometry, Observation Process)
+```
+
+The second expression is a research hypothesis, not architecture doctrine.
+
+It becomes especially relevant when TCDB later revisits separate occurrence and observation frames.
+
+## What E1.2 Does Not Establish
+
+This experiment does not establish that:
+
+- the coalescence dynamic program is novel;
+- the current cost function is optimal;
+- every missing event should be inferred;
+- an unobserved event can be reconstructed uniquely;
+- additive displacement proves causality;
+- the same method will handle duplicate observations;
+- event deletion is distinguishable from a genuine long interval without additional evidence;
+- endpoint displacement should become canonical state;
+- a trajectory must be persisted.
+
+Most importantly:
+
+```text
+long observed displacement
+```
+
+can mean either:
+
+```text
+a genuinely long interval
+```
+
+or:
+
+```text
+one or more unobserved intermediate events
+```
+
+Temporal geometry alone cannot necessarily distinguish them.
+
+That ambiguity must be preserved rather than guessed away.
+
+---
+
+# Current Robustness Interpretation
+
+E1 now supports the following experimental distinctions:
+
+```text
+translation invariance
+scale invariance
+observation completeness
+```
+
+These are independent dimensions of trajectory-query semantics.
+
+A useful trajectory representation therefore cannot be reduced to a single universal normalized vector.
+
+The most structurally interesting E1.2 result is:
+
+```text
+Endpoint displacement composes across a path.
+Observation loss contracts that path by vector addition.
+```
+
+This is mathematically simple and not itself novel, but it gives TCDB a precise way to reason about how incomplete observation changes derived event geometry.
+
+# Plan
 
 ```text
 E1.1  Temporal Scale Variation                    COMPLETE
-E1.2  Missing Events                              NEXT
-E1.3  Duplicate Events                            PENDING
+E1.2  Missing Events                              COMPLETE
+E1.3  Duplicate Events                            NEXT
 E1.4  Timestamp Jitter / Clock Uncertainty        PENDING
 E1.5  Variable Trajectory Length                  PENDING
 E1.6  Selector Contamination / Identity Ambiguity PENDING
@@ -135,4 +438,4 @@ E1.7  Signature Metric Comparison                 PENDING
 E1.8  Real-Data Reproduction                      PENDING
 ```
 
-E1.2 should determine how rapidly trajectory geometry degrades when observations are incomplete and whether robust comparison requires explicit missing-event semantics rather than ordinary vector distance.
+E1.3 should test the inverse observational pathology: duplicated observations introduce extra trajectory vertices and split or nearly repeat displacement structure rather than contracting it.
