@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import statistics
-from typing import Dict, Iterable, List
+from typing import Dict, List
 
 from research.layer3.hint_m import HintMIndex
 from research.layer3.reference import BoundaryPolicy, reference_scan_overlap
@@ -16,29 +16,46 @@ def run_distribution(
     queries: int,
     seed: int,
     m: int,
+    policy: BoundaryPolicy,
 ) -> Dict[str, float]:
     intervals = generate_intervals(rows, distribution, seed=seed)
     windows = generate_windows(queries, seed=seed + 1)
     index = HintMIndex(intervals, m=m)
 
-    unique_candidates: List[int] = []
-    scanned_references: List[int] = []
     match_counts: List[int] = []
+    conservative_candidates: List[int] = []
+    conservative_scans: List[int] = []
+    optimized_candidates: List[int] = []
+    optimized_scans: List[int] = []
+    optimized_comparisons: List[int] = []
+    optimized_duplicates: List[int] = []
 
     for window in windows:
-        expected = sorted(
-            reference_scan_overlap(intervals, window, BoundaryPolicy.HALF_OPEN)
-        )
-        actual, stats = index.query_overlap(window, BoundaryPolicy.HALF_OPEN)
+        expected = sorted(reference_scan_overlap(intervals, window, policy))
 
-        if sorted(actual) != expected:
+        conservative, conservative_stats = index.query_overlap(window, policy)
+        optimized, optimized_stats = index.query_overlap_optimized(window, policy)
+
+        if sorted(conservative) != expected:
             raise AssertionError(
-                f"HINT^m disagrees with reference oracle: {distribution=} {m=}"
+                f"conservative HINT^m disagrees with oracle: {distribution=} {m=}"
+            )
+        if sorted(optimized) != expected:
+            raise AssertionError(
+                f"optimized HINT^m disagrees with oracle: {distribution=} {m=}"
+            )
+        if optimized_stats.duplicate_emissions:
+            raise AssertionError(
+                f"optimized HINT^m emitted duplicates: {distribution=} {m=}"
             )
 
-        unique_candidates.append(stats.unique_candidates)
-        scanned_references.append(stats.scanned_references)
         match_counts.append(len(expected))
+        conservative_candidates.append(conservative_stats.unique_candidates)
+        conservative_scans.append(conservative_stats.scanned_references)
+        optimized_candidates.append(optimized_stats.unique_candidates)
+        optimized_scans.append(optimized_stats.scanned_references)
+        optimized_comparisons.append(optimized_stats.predicate_comparisons)
+        optimized_duplicates.append(optimized_stats.duplicate_emissions)
 
     return {
         "rows": float(rows),
@@ -46,8 +63,12 @@ def run_distribution(
         "m": float(m),
         "reference_amplification": index.reference_amplification,
         "avg_matches": statistics.mean(match_counts),
-        "avg_unique_candidates": statistics.mean(unique_candidates),
-        "avg_scanned_references": statistics.mean(scanned_references),
+        "avg_conservative_candidates": statistics.mean(conservative_candidates),
+        "avg_conservative_scans": statistics.mean(conservative_scans),
+        "avg_optimized_candidates": statistics.mean(optimized_candidates),
+        "avg_optimized_scans": statistics.mean(optimized_scans),
+        "avg_optimized_comparisons": statistics.mean(optimized_comparisons),
+        "avg_optimized_duplicates": statistics.mean(optimized_duplicates),
     }
 
 
@@ -57,11 +78,19 @@ def main() -> None:
     parser.add_argument("--queries", type=int, default=200)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--m", type=int, nargs="+", default=[8, 10, 12])
+    parser.add_argument(
+        "--policy",
+        choices=[policy.value for policy in BoundaryPolicy],
+        default=BoundaryPolicy.HALF_OPEN.value,
+    )
     args = parser.parse_args()
+    policy = BoundaryPolicy(args.policy)
 
     print(
-        "distribution,m,rows,queries,reference_amplification,avg_matches,"
-        "avg_unique_candidates,avg_scanned_references"
+        "distribution,m,policy,rows,queries,reference_amplification,avg_matches,"
+        "avg_conservative_candidates,avg_conservative_scans,"
+        "avg_optimized_candidates,avg_optimized_scans,"
+        "avg_optimized_comparisons,avg_optimized_duplicates"
     )
 
     for m in args.m:
@@ -72,13 +101,18 @@ def main() -> None:
                 queries=args.queries,
                 seed=args.seed,
                 m=m,
+                policy=policy,
             )
             print(
-                f"{distribution},{m},{args.rows},{args.queries},"
+                f"{distribution},{m},{policy.value},{args.rows},{args.queries},"
                 f"{result['reference_amplification']:.6f},"
                 f"{result['avg_matches']:.3f},"
-                f"{result['avg_unique_candidates']:.3f},"
-                f"{result['avg_scanned_references']:.3f}"
+                f"{result['avg_conservative_candidates']:.3f},"
+                f"{result['avg_conservative_scans']:.3f},"
+                f"{result['avg_optimized_candidates']:.3f},"
+                f"{result['avg_optimized_scans']:.3f},"
+                f"{result['avg_optimized_comparisons']:.3f},"
+                f"{result['avg_optimized_duplicates']:.3f}"
             )
 
 
