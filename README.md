@@ -36,8 +36,9 @@ Current state:
 ```text
 Layer 0  Foundation                ESTABLISHED
 Layer 1  Persistence               ESTABLISHED
-Layer 2  Transactions & Recovery   NEXT
-Layer 3+                           UNDEFINED / RESEARCH
+Layer 2  Transactions & Recovery   ESTABLISHED
+Layer 3  Coordinate Access         NEXT
+Layer 4+                           UNDEFINED / RESEARCH
 ```
 
 ## Layer 0 — Foundation
@@ -79,6 +80,28 @@ PersistentDatabase
 
 Layer 1 establishes an append-oriented canonical persistence model in which published Records are not modified in place, sealed Segments are immutable, the Manifest defines authoritative physical membership, and rebuildable indexes never become the sole source of semantic truth.
 
+## Layer 2 — Transactions & Recovery
+
+```text
+Transaction
+├── transaction.id
+├── snapshot.sequence
+├── staged mutations
+└── state
+
+Commit
+├── transaction.id
+└── commit.sequence
+
+WAL
+├── ordered LSNs
+├── mutation records
+├── commit records
+└── checkpoints
+```
+
+Layer 2 establishes the durable transaction contract: WAL-first commit, strict-serializable committed history, commit-before-acknowledgement, redo-only recovery, checkpointed materialization, atomic Manifest publication, commit-status recovery after ambiguous network outcomes, and deterministic failure injection at every state-transition boundary.
+
 See:
 
 - `ARCHITECTURE.md`
@@ -86,6 +109,8 @@ See:
 - `docs/architecture/root-algorithms.md`
 - `docs/architecture/layer-1-persistence.md`
 - `docs/architecture/persistence-algorithms.md`
+- `docs/architecture/layer-2-transactions-recovery.md`
+- `docs/architecture/transaction-recovery-algorithms.md`
 
 ## Specification Tracks
 
@@ -99,4 +124,4 @@ TCDP/1 is intended to be QUIC-native.
 
 TCDB has transitioned from exploratory research and proof-of-concept work into formal architecture and specification development.
 
-The next architecture target is **Layer 2 — Transactions & Recovery**: transaction boundaries, write-ahead logging, commit acknowledgement, fsync ordering, checkpoints, manifest publication, and deterministic crash recovery.
+The next architecture target is **Layer 3 — Coordinate Access & Indexing**: access-path semantics, endpoint indexes, predicate-aware planning primitives, rebuildable index publication, uncertainty-aware access, multi-frame access, and correctness equivalence between indexed execution and canonical scans.
